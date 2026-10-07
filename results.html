@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ArcelorMittal · Use-Case Feedback · Results</title>
+<script>try{var t=localStorage.getItem('am-long-sic-theme');if(t==='light')document.documentElement.setAttribute('data-theme','light');}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+
+<!-- ---------- Top bar ---------- -->
+<div class="topbar">
+  <a class="brand" href="results.html">
+    <div class="brand-logo">
+      <svg viewBox="0 0 130 60" xmlns="http://www.w3.org/2000/svg" aria-label="ArcelorMittal">
+        <path d="M14 52 C 40 8, 96 0, 124 22 C 100 10, 58 20, 42 48 C 56 24, 84 22, 94 34 L 80 46"
+              fill="none" stroke="#f6651e" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span class="wordmark">ArcelorMittal</span>
+    </div>
+    <img class="sf-logo" src="img/salesforce-logo.png" alt="Salesforce" />
+  </a>
+  <button class="theme-toggle" title="Toggle light / dark" aria-label="Toggle light or dark theme">
+    <svg class="ic-moon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+    <svg class="ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8l1.8-1.8M18 6l1.8-1.8"/></svg>
+  </button>
+</div>
+
+<div class="preview-banner" id="previewBanner">
+  ⚠️ Local preview mode — showing only feedback saved in this browser (Firebase not configured yet).
+</div>
+
+<div class="results-wrap">
+  <div class="res-head">
+    <div>
+      <div class="eyebrow">Live feedback</div>
+      <h1>Use-case <span class="accent">priorities</span></h1>
+    </div>
+    <div class="res-actions">
+      <button type="button" id="csvBtn">⬇ Download CSV</button>
+      <button type="button" id="pngBtn">⬇ Results image</button>
+    </div>
+  </div>
+
+  <div class="res-stats" id="stats"></div>
+
+  <div class="res-grid">
+    <!-- Heat map -->
+    <div class="card-panel">
+      <h2>Value × Effort heat map</h2>
+      <div class="sub">
+        Bubble = use case<br>
+        Size = number of responses<br>
+        Top-right (high value + high manual effort today) = do first
+      </div>
+      <div id="heatHost"><div class="hm-empty" id="hmEmpty">Waiting for the first responses…</div></div>
+    </div>
+
+    <!-- Priority list -->
+    <div class="card-panel">
+      <h2>Priority ranking</h2>
+      <div class="sub">Auto-ranked by value × effort today. Highest first.</div>
+      <div class="prio-list" id="prioList"></div>
+    </div>
+
+  </div>
+</div>
+
+<script type="module">
+  import { USE_CASES, THEMES } from "./js/usecases.js";
+  import { watchFeedback, getAllFeedback, isConfigured } from "./js/db.js";
+
+  if (!isConfigured) document.getElementById('previewBanner').classList.add('show');
+
+  // effort = how much MANUAL effort this takes today (the pain the use case removes).
+  // High value + high current effort = biggest payoff → ranks top.
+  const PRIORITY = (v, e) => v * e;
+  const avg = (arr) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+  const esc = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  let latest = {};        // shaped feedback map, kept for export
+  let latestRanked = [];  // [{uc, s}] sorted, kept for the image export
+
+  // ---- aggregate one use case's responses ----
+  function summarise(responses) {
+    const vals = responses.map(r => r.value).filter(Boolean);
+    const effs = responses.map(r => r.effort).filter(Boolean);
+    const count = responses.length;
+    const avgV = avg(vals), avgE = avg(effs);
+    return { count, avgV, avgE, score: (vals.length && effs.length) ? PRIORITY(avgV, avgE) : 0 };
+  }
+
+  function tallyField(responses, field) {
+    const t = {};
+    responses.forEach(r => (r[field] || []).forEach(v => { t[v] = (t[v] || 0) + 1; }));
+    return t;
+  }
+
+  // ---- render everything from the shaped map ----
+  function render(map) {
+    latest = map;
+    const rows = USE_CASES.map(uc => ({ uc, resp: map[uc.id] || [] }));
+    const totalResponses = rows.reduce((n, r) => n + r.resp.length, 0);
+    const ucsWith = rows.filter(r => r.resp.length).length;
+
+    // stats
+    document.getElementById('stats').innerHTML = `
+      <div class="res-stat"><div class="n">${totalResponses}</div><div class="l">Responses</div></div>
+      <div class="res-stat"><div class="n">${ucsWith}/${USE_CASES.length}</div><div class="l">Use cases rated</div></div>`;
+
+    renderHeatmap(rows);
+    renderPriority(rows);
+  }
+
+  // ---- heat map (2×2 SVG bubble matrix) ----
+  function renderHeatmap(rows) {
+    const host = document.getElementById('heatHost');
+    const rated = rows.filter(r => r.resp.length && summarise(r.resp).count);
+    if (!rated.length) {
+      host.innerHTML = '<div class="hm-empty">Waiting for the first responses…</div>';
+      return;
+    }
+    const W = 560, H = 460, m = { l: 64, r: 24, t: 24, b: 56 };
+    const px = (e) => m.l + (e - 1) / 4 * (W - m.l - m.r);          // effort 1..5 → x
+    const py = (v) => (H - m.b) - (v - 1) / 4 * (H - m.t - m.b);    // value 1..5 → y (up)
+    const midX = px(3), midY = py(3);
+    const t = (act) => THEMES[act].solid;
+
+    let bubbles = '', labels = '';
+    rated.forEach(r => {
+      const s = summarise(r.resp);
+      const cx = px(s.avgE), cy = py(s.avgV);
+      const rad = 12 + Math.min(26, s.count * 4);
+      const col = t(r.uc.act);
+      bubbles += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${rad}" fill="${col}" fill-opacity="0.32" stroke="${col}" stroke-width="2"/>`;
+      labels += `<text x="${cx.toFixed(1)}" y="${cy.toFixed(1)}" text-anchor="middle" dominant-baseline="central" font-family="Oswald, sans-serif" font-weight="700" font-size="14" fill="var(--ink)">${r.uc.id.replace('UC','')}</text>`;
+    });
+
+    host.innerHTML = `
+      <svg id="heatmap" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+        <!-- quadrant shading: top-right (high value / high manual effort) = do first / sweet spot -->
+        <rect x="${midX}" y="${m.t}" width="${W-m.r-midX}" height="${midY-m.t}" fill="#35d6a4" fill-opacity="0.09"/>
+        <rect x="${m.l}" y="${m.t}" width="${midX-m.l}" height="${midY-m.t}" fill="#ffb020" fill-opacity="0.05"/>
+        <!-- axes -->
+        <line x1="${m.l}" y1="${m.t}" x2="${m.l}" y2="${H-m.b}" stroke="var(--line)" stroke-width="1"/>
+        <line x1="${m.l}" y1="${H-m.b}" x2="${W-m.r}" y2="${H-m.b}" stroke="var(--line)" stroke-width="1"/>
+        <line x1="${midX}" y1="${m.t}" x2="${midX}" y2="${H-m.b}" stroke="var(--line)" stroke-width="1" stroke-dasharray="4 4"/>
+        <line x1="${m.l}" y1="${midY}" x2="${W-m.r}" y2="${midY}" stroke="var(--line)" stroke-width="1" stroke-dasharray="4 4"/>
+        <!-- quadrant labels -->
+        <text x="${(midX+W-m.r)/2}" y="${m.t+16}" text-anchor="middle" font-family="Oswald" font-size="12" font-weight="700" fill="#35d6a4" opacity="0.95">DO FIRST</text>
+        <text x="${(m.l+midX)/2}" y="${m.t+16}" text-anchor="middle" font-family="Oswald" font-size="12" font-weight="700" fill="#ffb020" opacity="0.9">NICE TO HAVE</text>
+        <text x="${(m.l+midX)/2}" y="${H-m.b-8}" text-anchor="middle" font-family="Oswald" font-size="12" font-weight="700" fill="var(--mist)">IGNORE</text>
+        <text x="${(midX+W-m.r)/2}" y="${H-m.b-8}" text-anchor="middle" font-family="Oswald" font-size="12" font-weight="700" fill="var(--mist)">MAYBE</text>
+        <!-- axis titles -->
+        <text x="${(m.l+W-m.r)/2}" y="${H-14}" text-anchor="middle" font-family="Oswald" font-size="13" font-weight="700" fill="var(--ink-soft)">EFFORT TODAY  →</text>
+        <text x="18" y="${(m.t+H-m.b)/2}" text-anchor="middle" font-family="Oswald" font-size="13" font-weight="700" fill="var(--ink-soft)" transform="rotate(-90 18 ${(m.t+H-m.b)/2})">BUSINESS VALUE  →</text>
+        ${bubbles}
+        ${labels}
+      </svg>`;
+  }
+
+  // ---- priority ranking ----
+  function renderPriority(rows) {
+    const ranked = rows
+      .map(r => ({ uc: r.uc, s: summarise(r.resp) }))
+      .filter(x => x.s.count)
+      .sort((a, b) => b.s.score - a.s.score);
+    latestRanked = ranked;
+
+    const host = document.getElementById('prioList');
+    if (!ranked.length) { host.innerHTML = '<div class="hm-empty">No responses yet.</div>'; return; }
+    host.innerHTML = ranked.map((x, i) => `
+      <div class="prio">
+        <div class="rank">${i + 1}</div>
+        <div class="snum" style="background:${THEMES[x.uc.act].grad}">${x.uc.id.replace('UC','')}</div>
+        <div class="pbody">
+          <h3>${esc(x.uc.title)}</h3>
+          <div class="meta">${x.uc.id} · value ${x.s.avgV.toFixed(1)} · effort ${x.s.avgE.toFixed(1)} · ${x.s.count} vote${x.s.count === 1 ? '' : 's'}</div>
+        </div>
+        <div class="score">${x.s.score.toFixed(1)}<small>SCORE</small></div>
+      </div>`).join('');
+  }
+
+  // ====================== EXPORT ======================
+  function csvCell(v) {
+    const s = String(v == null ? '' : v);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+  function download(filename, text, type) {
+    const blob = new Blob([text], { type: type || 'text/plain;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+  async function exportCsv() {
+    const map = await getAllFeedback();          // always re-read latest for export
+    const rows = USE_CASES.map(uc => ({ uc, resp: map[uc.id] || [] }));
+
+    // Section 1: summary (one row per use case)
+    let out = 'SUMMARY\n';
+    out += ['UC', 'Title', 'Theme', 'Responses', 'Avg value', 'Avg effort', 'Priority score',
+            'Top channels', 'Top actions', 'Top data'].map(csvCell).join(',') + '\n';
+    const topList = (resp, field) => {
+      const t = tallyField(resp, field);
+      return Object.entries(t).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} (${n})`).join('; ');
+    };
+    rows.forEach(({ uc, resp }) => {
+      const s = summarise(resp);
+      out += [uc.id, uc.title, THEMES[uc.act].label, s.count,
+              s.count ? s.avgV.toFixed(2) : '', s.count ? s.avgE.toFixed(2) : '',
+              s.count ? s.score.toFixed(2) : '',
+              topList(resp, 'channels'), topList(resp, 'actions'), topList(resp, 'data')]
+             .map(csvCell).join(',') + '\n';
+    });
+
+    // Section 2: raw (one row per response)
+    out += '\nRAW RESPONSES\n';
+    out += ['UC', 'Title', 'Value', 'Effort', 'Data', 'Channels', 'Actions', 'Submitted'].map(csvCell).join(',') + '\n';
+    rows.forEach(({ uc, resp }) => {
+      resp.forEach(r => {
+        const when = r.submittedAt ? new Date(r.submittedAt).toISOString() : '';
+        out += [uc.id, uc.title, r.value || '', r.effort || '',
+                (r.data || []).join('; '), (r.channels || []).join('; '), (r.actions || []).join('; '), when]
+               .map(csvCell).join(',') + '\n';
+      });
+    });
+
+    download('sic-use-case-feedback.csv', out, 'text/csv;charset=utf-8');
+  }
+
+  const xmlEsc = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  function exportPng() {
+    const svg = document.getElementById('heatmap');
+    if (!svg) { alert('No heat map to export yet — wait for responses.'); return; }
+
+    // System font stack — web fonts (Oswald/Inter) are NOT available to an SVG
+    // rendered as an image, so use a font the image sandbox can always resolve.
+    const SYS = "Arial, Helvetica, sans-serif";
+
+    // resolve CSS variables → concrete colors so the standalone SVG renders
+    const cs = getComputedStyle(document.body);
+    const cvar = (name, fallback) => (cs.getPropertyValue(name).trim() || fallback);
+    const clone = svg.cloneNode(true);
+    clone.querySelectorAll('*').forEach(el => {
+      ['fill', 'stroke'].forEach(attr => {
+        const val = el.getAttribute(attr);
+        if (val && val.startsWith('var(')) el.setAttribute(attr, cvar(val.slice(4, -1).trim(), '#ffffff'));
+      });
+      // force the chart's text onto the system font too
+      if (el.hasAttribute('font-family')) el.setAttribute('font-family', SYS);
+    });
+
+    const panel  = cvar('--steel-2', '#151b25');
+    const steel3 = cvar('--steel-3', '#1b2230');
+    const line   = cvar('--line', 'rgba(255,255,255,0.09)');
+    const mist   = cvar('--mist', '#828e9f');
+    const ink    = cvar('--ink', '#eef2f8');
+    const inkSoft= cvar('--ink-soft', '#c4ccd8');
+    const molten = cvar('--molten-2', '#ff9a2e');
+
+    const vb = svg.viewBox.baseVal, cw = vb.width, ch = vb.height; // chart (560×460)
+    const pad = 28, gap = 24, headerH = 118, scale = 2;
+
+    // ---- left panel: heat map ----
+    const leftW = cw + pad * 2;
+
+    // ---- right panel: priority ranking (SVG rows) ----
+    const rightW = 520;
+    const rowH = 70, rowGap = 10, rowsTop = pad + headerH;
+    const ranked = latestRanked;
+    const bodyH = ranked.length ? ranked.length * rowH + (ranked.length - 1) * rowGap : 60;
+
+    const panelH = Math.max(pad + headerH + ch + pad, rowsTop + bodyH + pad);
+    const W = pad + leftW + gap + rightW + pad;
+    const H = pad * 2 + panelH;
+    const leftX = pad, rightX = pad + leftW + gap;
+    const chartX = leftX + pad, chartY = pad + headerH;
+
+    // gradient defs for the badges (one per theme used)
+    const gradDefs = `
+      <defs>
+        <linearGradient id="g-sell" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff9a2e"/><stop offset="1" stop-color="#ff6a13"/></linearGradient>
+        <linearGradient id="g-know" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#d63c8f"/><stop offset="1" stop-color="#8e1e6a"/></linearGradient>
+        <linearGradient id="g-every" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff5a4d"/><stop offset="1" stop-color="#e4002b"/></linearGradient>
+      </defs>`;
+
+    const leftHeader = `
+      <rect x="${leftX}" y="${pad}" width="${leftW}" height="${panelH}" rx="18" fill="${panel}" stroke="${line}" stroke-width="1.5"/>
+      <text x="${leftX + pad}" y="${pad + 22}" font-family="${SYS}" font-weight="700" font-size="22" letter-spacing="1" fill="${ink}">VALUE × EFFORT HEAT MAP</text>
+      <text x="${leftX + pad}" y="${pad + 50}" font-family="${SYS}" font-size="13" fill="${mist}">Bubble = use case</text>
+      <text x="${leftX + pad}" y="${pad + 70}" font-family="${SYS}" font-size="13" fill="${mist}">Size = number of responses</text>
+      <text x="${leftX + pad}" y="${pad + 90}" font-family="${SYS}" font-size="13" fill="${mist}">Top-right (high value + high manual effort today) = do first</text>`;
+
+    const rightHeader = `
+      <rect x="${rightX}" y="${pad}" width="${rightW}" height="${panelH}" rx="18" fill="${panel}" stroke="${line}" stroke-width="1.5"/>
+      <text x="${rightX + pad}" y="${pad + 22}" font-family="${SYS}" font-weight="700" font-size="22" letter-spacing="1" fill="${ink}">PRIORITY RANKING</text>
+      <text x="${rightX + pad}" y="${pad + 50}" font-family="${SYS}" font-size="13" fill="${mist}">Auto-ranked by value × effort today. Highest first.</text>`;
+
+    const rows = ranked.map((x, i) => {
+      const y = rowsTop + i * (rowH + rowGap);
+      const rx = rightX + pad;
+      const gid = x.uc.act === 'sell' ? 'g-sell' : x.uc.act === 'know' ? 'g-know' : 'g-every';
+      const rankX = rx + 16;
+      const badgeX = rx + 44, badgeY = y + (rowH - 38) / 2;
+      const textX = badgeX + 38 + 14;
+      const scoreX = rightX + rightW - pad - 10;
+      return `
+        <rect x="${rx}" y="${y}" width="${rightW - pad * 2}" height="${rowH}" rx="12" fill="${steel3}" stroke="${line}" stroke-width="1"/>
+        <text x="${rankX}" y="${y + rowH/2}" text-anchor="middle" dominant-baseline="central" font-family="${SYS}" font-weight="700" font-size="24" fill="${mist}">${i + 1}</text>
+        <rect x="${badgeX}" y="${badgeY}" width="38" height="38" rx="10" fill="url(#${gid})"/>
+        <text x="${badgeX + 19}" y="${badgeY + 20}" text-anchor="middle" dominant-baseline="central" font-family="${SYS}" font-weight="700" font-size="15" fill="#fff">${x.uc.id.replace('UC','')}</text>
+        <text x="${textX}" y="${y + 26}" font-family="${SYS}" font-weight="700" font-size="16" fill="${ink}">${xmlEsc(x.uc.title.toUpperCase())}</text>
+        <text x="${textX}" y="${y + 48}" font-family="${SYS}" font-size="12" fill="${mist}">${x.uc.id} · value ${x.s.avgV.toFixed(1)} · effort ${x.s.avgE.toFixed(1)} · ${x.s.count} vote${x.s.count === 1 ? '' : 's'}</text>
+        <text x="${scoreX}" y="${y + 30}" text-anchor="end" font-family="${SYS}" font-weight="700" font-size="22" fill="${molten}">${x.s.score.toFixed(1)}</text>
+        <text x="${scoreX}" y="${y + 48}" text-anchor="end" font-family="${SYS}" font-size="9" letter-spacing="1.5" fill="${mist}">SCORE</text>`;
+    }).join('');
+
+    const svgStr =
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">` +
+      gradDefs +
+      `<rect x="0" y="0" width="${W}" height="${H}" fill="${panel}"/>` +
+      leftHeader +
+      `<g transform="translate(${chartX} ${chartY})">${clone.innerHTML}</g>` +
+      rightHeader +
+      rows +
+      `</svg>`;
+
+    const img = new Image();
+    const url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgStr);
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = W * scale; canvas.height = H * scale;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = panel; ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(blob => {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob); a.download = 'sic-use-case-results.png'; a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      }, 'image/png');
+    };
+    img.onerror = () => alert('Could not render the results image.');
+    img.src = url;
+  }
+
+  document.getElementById('csvBtn').addEventListener('click', exportCsv);
+  document.getElementById('pngBtn').addEventListener('click', exportPng);
+
+  // ====================== live ======================
+  watchFeedback(render).catch(err => {
+    document.getElementById('hmEmpty').textContent = 'Could not connect: ' + (err && err.message ? err.message : err);
+  });
+
+  // ---- Theme toggle (shared) ----
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest('.theme-toggle')) return;
+    var light = document.documentElement.getAttribute('data-theme') === 'light';
+    if (light) { document.documentElement.removeAttribute('data-theme'); }
+    else { document.documentElement.setAttribute('data-theme', 'light'); }
+    try { localStorage.setItem('am-long-sic-theme', light ? 'dark' : 'light'); } catch (e) {}
+  });
+</script>
+</body>
+</html>

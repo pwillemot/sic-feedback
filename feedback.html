@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<title>ArcelorMittal · Use-Case Feedback</title>
+<script>try{var t=localStorage.getItem('am-long-sic-theme');if(t==='light')document.documentElement.setAttribute('data-theme','light');}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+
+<!-- ---------- Top bar ---------- -->
+<div class="topbar">
+  <a class="brand" href="index.html">
+    <div class="brand-logo">
+      <svg viewBox="0 0 130 60" xmlns="http://www.w3.org/2000/svg" aria-label="ArcelorMittal">
+        <path d="M14 52 C 40 8, 96 0, 124 22 C 100 10, 58 20, 42 48 C 56 24, 84 22, 94 34 L 80 46"
+              fill="none" stroke="#f6651e" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span class="wordmark">ArcelorMittal</span>
+    </div>
+    <img class="sf-logo" src="img/salesforce-logo.png" alt="Salesforce" />
+  </a>
+  <button class="theme-toggle" title="Toggle light / dark" aria-label="Toggle light or dark theme">
+    <svg class="ic-moon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+    <svg class="ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8l1.8-1.8M18 6l1.8-1.8"/></svg>
+  </button>
+</div>
+
+<div class="preview-banner" id="previewBanner">
+  ⚠️ Local preview mode — answers are saved only in this browser (Firebase not configured yet).
+</div>
+
+<div class="wrap">
+
+  <!-- ---------- Use-case picker (shown when no ?uc= is given) ---------- -->
+  <div class="picker" id="picker" style="display:none">
+    <h2>Rate a use case</h2>
+    <p class="sub">Pick the use case you want to give feedback on.</p>
+    <div class="pick-list" id="pickList"></div>
+  </div>
+
+  <!-- ---------- Feedback form ---------- -->
+  <div id="formWrap" style="display:none">
+    <div class="uc-head">
+      <div class="uc-eyebrow">
+        <span class="uc-num" id="ucNum">UC00</span>
+        <span class="uc-chip" id="ucChip">Theme</span>
+      </div>
+      <h1 id="ucTitle">Use case</h1>
+      <p id="ucLead"></p>
+    </div>
+
+    <form class="form" id="form">
+      <!-- Business Value -->
+      <div class="section">
+        <div class="q">Business value for you <span class="req">*</span></div>
+        <div class="hint">If you had this, how valuable would it be?</div>
+        <div class="scale" data-scale="value" role="radiogroup" aria-label="Business value">
+          <button type="button" value="1">1</button>
+          <button type="button" value="2">2</button>
+          <button type="button" value="3">3</button>
+          <button type="button" value="4">4</button>
+          <button type="button" value="5">5</button>
+        </div>
+        <div class="scale-ends"><span>Low value</span><span>High value</span></div>
+      </div>
+
+      <!-- Current Effort -->
+      <div class="section">
+        <div class="q">Effort today <span class="req">*</span></div>
+        <div class="hint">How much effort does doing this take <b>today</b>, without the use case?</div>
+        <div class="scale" data-scale="effort" role="radiogroup" aria-label="Current effort today">
+          <button type="button" value="1">1</button>
+          <button type="button" value="2">2</button>
+          <button type="button" value="3">3</button>
+          <button type="button" value="4">4</button>
+          <button type="button" value="5">5</button>
+        </div>
+        <div class="scale-ends"><span>Little effort</span><span>A lot of effort</span></div>
+      </div>
+
+      <!-- Data needed -->
+      <div class="section">
+        <div class="q">Data needed</div>
+        <div class="hint">What data do you think this needs? Tap all that apply — add your own below.</div>
+        <div class="chips" data-chips="data"></div>
+        <div class="add-row">
+          <input type="text" data-add="data" placeholder="Add your own data…" />
+          <button type="button" class="btn-add" data-addbtn="data">+ Add</button>
+        </div>
+      </div>
+
+      <!-- Channels -->
+      <div class="section">
+        <div class="q">Where do you want it?</div>
+        <div class="hint">Which channels should it be available on? Tap all that apply — add your own below.</div>
+        <div class="chips" data-chips="channels"></div>
+        <div class="add-row">
+          <input type="text" data-add="channels" placeholder="Add your own channel…" />
+          <button type="button" class="btn-add" data-addbtn="channels">+ Add</button>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="section">
+        <div class="q">What should it do?</div>
+        <div class="hint">What actions should the use case take? Tap all that apply — add your own below.</div>
+        <div class="chips" data-chips="actions"></div>
+        <div class="add-row">
+          <input type="text" data-add="actions" placeholder="Add your own action…" />
+          <button type="button" class="btn-add" data-addbtn="actions">+ Add</button>
+        </div>
+      </div>
+
+      <div class="submit-bar">
+        <button type="submit" class="btn-submit" id="submitBtn" disabled>Send feedback</button>
+        <div class="note">
+          <span class="anon">Fully anonymous</span> — we never ask your name.
+          Pick a value &amp; effort rating to send.
+        </div>
+      </div>
+    </form>
+
+    <!-- Thank-you -->
+    <div class="thanks" id="thanks">
+      <div class="big">🙌</div>
+      <h2>Thanks!</h2>
+      <p id="thanksMsg">Your feedback was captured anonymously.</p>
+      <div class="actions">
+        <a class="primary" href="index.html">Rate another use case</a>
+        <button type="button" id="editBtn">Change my answer</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script type="module">
+  import { USE_CASES, THEMES, getUseCase, DATA_OPTIONS, CHANNEL_OPTIONS, ACTION_OPTIONS } from "./js/usecases.js";
+  import { saveResponse, getMyResponse, isConfigured } from "./js/db.js";
+
+  // Local-preview banner
+  if (!isConfigured) document.getElementById('previewBanner').classList.add('show');
+
+  const params = new URLSearchParams(location.search);
+  const uc = getUseCase(params.get('uc'));
+
+  const CHIP_SETS = { data: DATA_OPTIONS, channels: CHANNEL_OPTIONS, actions: ACTION_OPTIONS };
+
+  if (!uc) {
+    // ---------- No/invalid ?uc= → show the picker ----------
+    document.getElementById('picker').style.display = 'block';
+    const list = document.getElementById('pickList');
+    list.innerHTML = USE_CASES.map(u => {
+      const t = THEMES[u.act];
+      return `<a class="pick" href="feedback.html?uc=${u.id}" style="--pa:${t.solid};--pg:${t.grad}">
+        <span class="pn">${u.id.replace('UC','')}</span>
+        <span class="pt"><h3>${u.title}</h3><span>${t.label} · ${u.tag}</span></span>
+      </a>`;
+    }).join('');
+  } else {
+    // ---------- Render the form for this use case ----------
+    const t = THEMES[uc.act];
+    document.documentElement.style.setProperty('--acc', t.solid);
+    document.documentElement.style.setProperty('--acc-grad', t.grad);
+    document.getElementById('formWrap').style.display = 'block';
+    document.getElementById('ucNum').textContent = uc.id;
+    document.getElementById('ucChip').textContent = t.label;
+    document.getElementById('ucTitle').textContent = uc.title;
+    document.getElementById('ucLead').textContent = uc.lead || '';
+    document.title = `${uc.id} feedback · ArcelorMittal`;
+
+    // --- selection state (chip fields are ordered Sets of labels) ---
+    const state = { value: null, effort: null, data: new Set(), channels: new Set(), actions: new Set() };
+
+    const submitBtn = document.getElementById('submitBtn');
+    function refreshSubmit() { submitBtn.disabled = !(state.value && state.effort); }
+
+    const esc = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+    // Add (or toggle on) a chip for a field. `custom` chips get a × remove affordance.
+    function addChip(field, label, { custom = false, selected = true } = {}) {
+      const val = String(label).trim();
+      if (!val) return;
+      const host = document.querySelector(`.chips[data-chips="${field}"]`);
+      // already present? just toggle selection on
+      const existing = [...host.querySelectorAll('.chip')].find(c => c.dataset.val.toLowerCase() === val.toLowerCase());
+      if (existing) { if (selected) { existing.classList.add('sel'); state[field].add(existing.dataset.val); } return; }
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'chip' + (selected ? ' sel' : '') + (custom ? ' custom' : '');
+      chip.dataset.val = val;
+      chip.innerHTML = esc(val) + (custom ? ' <span class="x" aria-label="remove">×</span>' : '');
+      host.appendChild(chip);
+      if (selected) state[field].add(val);
+    }
+
+    // Build the built-in chip groups
+    for (const key of Object.keys(CHIP_SETS)) {
+      CHIP_SETS[key].forEach(label => addChip(key, label, { custom: false, selected: false }));
+    }
+
+    // scales
+    document.querySelectorAll('.scale').forEach(scale => {
+      const field = scale.dataset.scale;
+      scale.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('click', () => {
+          scale.querySelectorAll('button').forEach(b => b.classList.remove('sel'));
+          btn.classList.add('sel');
+          state[field] = parseInt(btn.value, 10);
+          refreshSubmit();
+        });
+      });
+    });
+
+    // chip clicks (toggle select; × removes a custom chip entirely) — delegated
+    document.querySelectorAll('.chips').forEach(group => {
+      const field = group.dataset.chips;
+      group.addEventListener('click', (e) => {
+        const chip = e.target.closest('.chip');
+        if (!chip) return;
+        const v = chip.dataset.val;
+        if (e.target.classList.contains('x')) {        // remove a custom chip
+          state[field].delete(v); chip.remove(); return;
+        }
+        if (state[field].has(v)) { state[field].delete(v); chip.classList.remove('sel'); }
+        else { state[field].add(v); chip.classList.add('sel'); }
+      });
+    });
+
+    // "Add your own" — type + Enter, or the + button
+    function commitAdd(field) {
+      const inp = document.querySelector(`input[data-add="${field}"]`);
+      const raw = (inp.value || '').trim();
+      if (!raw) return;
+      // allow a comma-separated burst too
+      raw.split(',').map(s => s.trim()).filter(Boolean).forEach(s => addChip(field, s, { custom: true, selected: true }));
+      inp.value = '';
+      inp.focus();
+    }
+    document.querySelectorAll('input[data-add]').forEach(inp => {
+      inp.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); commitAdd(inp.dataset.add); }
+      });
+    });
+    document.querySelectorAll('.btn-add').forEach(btn => {
+      btn.addEventListener('click', () => commitAdd(btn.dataset.addbtn));
+    });
+
+    // pre-fill if this browser already answered this use case
+    getMyResponse(uc.id).then(prev => {
+      if (!prev) return;
+      if (prev.value) { const b = document.querySelector(`.scale[data-scale="value"] button[value="${prev.value}"]`); if (b) b.click(); }
+      if (prev.effort) { const b = document.querySelector(`.scale[data-scale="effort"] button[value="${prev.effort}"]`); if (b) b.click(); }
+      for (const key of ['data','channels','actions']) {
+        (prev[key] || []).forEach(val => {
+          const known = CHIP_SETS[key].some(l => l.toLowerCase() === String(val).toLowerCase());
+          addChip(key, val, { custom: !known, selected: true });
+        });
+      }
+    }).catch(()=>{});
+
+    function collect(key) {
+      // include any still-unadded text sitting in the input
+      commitAdd(key);
+      return [...state[key]];
+    }
+
+    document.getElementById('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!(state.value && state.effort)) return;
+      submitBtn.disabled = true; submitBtn.textContent = 'Sending…';
+      const response = {
+        value: state.value,
+        effort: state.effort,
+        data: collect('data'),
+        channels: collect('channels'),
+        actions: collect('actions'),
+      };
+      try {
+        const mode = await saveResponse(uc.id, response);
+        const msg = mode === 'local'
+          ? 'Saved in this browser (local preview mode).'
+          : 'Your feedback was captured anonymously.';
+        document.getElementById('thanksMsg').textContent = msg;
+        document.getElementById('form').classList.add('hide');
+        document.getElementById('thanks').classList.add('show');
+        window.scrollTo(0, 0);
+      } catch (err) {
+        submitBtn.disabled = false; submitBtn.textContent = 'Send feedback';
+        alert('Sorry — could not send. ' + (err && err.message ? err.message : ''));
+      }
+    });
+
+    document.getElementById('editBtn').addEventListener('click', () => {
+      document.getElementById('thanks').classList.remove('show');
+      document.getElementById('form').classList.remove('hide');
+      submitBtn.disabled = false; submitBtn.textContent = 'Send feedback';
+      refreshSubmit();
+      window.scrollTo(0, 0);
+    });
+  }
+
+  // ---- Theme toggle (shared across the SIC site) ----
+  document.addEventListener('click', function(e){
+    if(!e.target.closest('.theme-toggle')) return;
+    var light = document.documentElement.getAttribute('data-theme') === 'light';
+    if(light){ document.documentElement.removeAttribute('data-theme'); }
+    else { document.documentElement.setAttribute('data-theme','light'); }
+    try{ localStorage.setItem('am-long-sic-theme', light ? 'dark' : 'light'); }catch(e){}
+  });
+</script>
+</body>
+</html>
