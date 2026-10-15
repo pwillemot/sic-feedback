@@ -24,10 +24,16 @@
     </div>
     <img class="sf-logo" src="img/salesforce-logo.png" alt="Salesforce" />
   </a>
-  <button class="theme-toggle" title="Toggle light / dark" aria-label="Toggle light or dark theme">
-    <svg class="ic-moon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
-    <svg class="ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8l1.8-1.8M18 6l1.8-1.8"/></svg>
-  </button>
+  <div class="topbar-right">
+    <nav class="ver-switch" aria-label="Results version">
+      <a href="results.html" class="active" aria-current="page">Live</a>
+      <a href="results-v2.html">Final v2</a>
+    </nav>
+    <button class="theme-toggle" title="Toggle light / dark" aria-label="Toggle light or dark theme">
+      <svg class="ic-moon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      <svg class="ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8l1.8-1.8M18 6l1.8-1.8"/></svg>
+    </button>
+  </div>
 </div>
 
 <div class="preview-banner" id="previewBanner">
@@ -63,35 +69,81 @@
     <!-- Priority list -->
     <div class="card-panel">
       <h2>Priority ranking</h2>
-      <div class="sub">Auto-ranked by value × effort today. Highest first.</div>
+      <div class="sub">Ranked by value × effort today, <b>weighted by the number of responses</b>, then <b>discounted for ArcelorMittal back-end dependency</b> (rated per use case: low / medium / high) — on-platform quick wins rise, deep-integration use cases are pulled down. Highest first.</div>
       <div class="prio-list" id="prioList"></div>
     </div>
 
   </div>
+
+  <!-- Dependency on ArcelorMittal systems -->
+  <div class="res-grid dep-grid">
+    <div class="card-panel">
+      <h2>Dependency on ArcelorMittal systems</h2>
+      <div class="sub">
+        The back-end systems each use case needs, from the “data needed” answers.<br>
+        Ordered by priority; number = how many said it. <span class="bk-key">Highlighted</span> = ArcelorMittal back-end (adds integration cost).
+      </div>
+      <div id="depList"><div class="hm-empty">Waiting for the first responses…</div></div>
+    </div>
+
+    <div class="card-panel">
+      <h2>Systems · integration load</h2>
+      <div class="sub">
+        How often each ArcelorMittal system is needed across all use cases,<br>
+        and how many separate use cases depend on it.
+      </div>
+      <div id="sysList"><div class="hm-empty">Waiting for the first responses…</div></div>
+    </div>
+  </div>
 </div>
 
 <script type="module">
-  import { USE_CASES, THEMES } from "./js/usecases.js";
+  import { USE_CASES, THEMES, DATA_OPTIONS } from "./js/usecases.js";
   import { watchFeedback, getAllFeedback, isConfigured } from "./js/db.js";
 
   if (!isConfigured) document.getElementById('previewBanner').classList.add('show');
 
   // effort = how much MANUAL effort this takes today (the pain the use case removes).
   // High value + high current effort = biggest payoff → ranks top.
-  const PRIORITY = (v, e) => v * e;
+  //
+  // Confidence weighting: a plain value × effort treats 3 votes the same as 12.
+  // Instead we pull each use case's value and effort toward the neutral middle of
+  // the scale until enough people have confirmed them — so a thinly-rated idea
+  // can't tie a well-rated one. PRIOR_K is how many "neutral" votes every use case
+  // starts with; real votes outweigh it as they come in.
+  const MIDPOINT = 3;   // neutral point of the 1–5 scale
+  const PRIOR_K  = 3;   // strength of the neutral prior, in votes
   const avg = (arr) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+  const shrink = (sum, k) => (sum + PRIOR_K * MIDPOINT) / (k + PRIOR_K);
+
+  // Delivery cost: use cases that lean on ArcelorMittal back-end systems need deep
+  // integration, so they're slower/riskier to deliver than ones that live on the
+  // core Salesforce platform. The dependency level is set per use case (business
+  // guidance, in usecases.js: dep = low | medium | high) and discounts the demand
+  // score — the stronger the dependency, the more of the score is held back.
+  const DEP_DISCOUNT = { low: 0.1, medium: 0.35, high: 0.6 };
+  // Which "data needed" tags are AM back-end systems — used only to highlight them
+  // in the dependency panels below (the score uses the dep level above).
+  const BACKEND_SYSTEMS = new Set(["ERP / SAP", "Orders / inventory", "Logistics / shipping"]);
   const esc = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
   let latest = {};        // shaped feedback map, kept for export
   let latestRanked = [];  // [{uc, s}] sorted, kept for the image export
 
   // ---- aggregate one use case's responses ----
-  function summarise(responses) {
+  function summarise(responses, uc) {
     const vals = responses.map(r => r.value).filter(Boolean);
     const effs = responses.map(r => r.effort).filter(Boolean);
     const count = responses.length;
     const avgV = avg(vals), avgE = avg(effs);
-    return { count, avgV, avgE, score: (vals.length && effs.length) ? PRIORITY(avgV, avgE) : 0 };
+    // confidence-weighted value & effort (pulled toward MIDPOINT when votes are few)
+    const adjV = shrink(vals.reduce((a, b) => a + b, 0), vals.length);
+    const adjE = shrink(effs.reduce((a, b) => a + b, 0), effs.length);
+    const demand = adjV * adjE;                         // confidence-weighted value × effort
+    const dep = (uc && uc.dep) || 'low';                // AM back-end dependency (business guidance)
+    const depDiscount = DEP_DISCOUNT[dep] ?? 0;
+    const score = (vals.length && effs.length) ? demand * (1 - depDiscount) : 0;
+    return { count, avgV, avgE, adjV, adjE, demand, dep, depDiscount, score };
   }
 
   function tallyField(responses, field) {
@@ -106,20 +158,25 @@
     const rows = USE_CASES.map(uc => ({ uc, resp: map[uc.id] || [] }));
     const totalResponses = rows.reduce((n, r) => n + r.resp.length, 0);
     const ucsWith = rows.filter(r => r.resp.length).length;
+    const sysSet = new Set();
+    rows.forEach(r => r.resp.forEach(x => (x.data || []).forEach(d => sysSet.add(d))));
 
     // stats
     document.getElementById('stats').innerHTML = `
       <div class="res-stat"><div class="n">${totalResponses}</div><div class="l">Responses</div></div>
-      <div class="res-stat"><div class="n">${ucsWith}/${USE_CASES.length}</div><div class="l">Use cases rated</div></div>`;
+      <div class="res-stat"><div class="n">${ucsWith}/${USE_CASES.length}</div><div class="l">Use cases rated</div></div>
+      <div class="res-stat"><div class="n">${sysSet.size}</div><div class="l">AM systems referenced</div></div>`;
 
     renderHeatmap(rows);
     renderPriority(rows);
+    renderDependencies(rows);
+    renderSystems(rows);
   }
 
   // ---- heat map (2×2 SVG bubble matrix) ----
   function renderHeatmap(rows) {
     const host = document.getElementById('heatHost');
-    const rated = rows.filter(r => r.resp.length && summarise(r.resp).count);
+    const rated = rows.filter(r => r.resp.length && summarise(r.resp, r.uc).count);
     if (!rated.length) {
       host.innerHTML = '<div class="hm-empty">Waiting for the first responses…</div>';
       return;
@@ -132,7 +189,7 @@
 
     let bubbles = '', labels = '';
     rated.forEach(r => {
-      const s = summarise(r.resp);
+      const s = summarise(r.resp, r.uc);
       const cx = px(s.avgE), cy = py(s.avgV);
       const rad = 12 + Math.min(26, s.count * 4);
       const col = t(r.uc.act);
@@ -166,23 +223,95 @@
   // ---- priority ranking ----
   function renderPriority(rows) {
     const ranked = rows
-      .map(r => ({ uc: r.uc, s: summarise(r.resp) }))
+      .map(r => ({ uc: r.uc, s: summarise(r.resp, r.uc) }))
       .filter(x => x.s.count)
       .sort((a, b) => b.s.score - a.s.score);
     latestRanked = ranked;
 
     const host = document.getElementById('prioList');
     if (!ranked.length) { host.innerHTML = '<div class="hm-empty">No responses yet.</div>'; return; }
-    host.innerHTML = ranked.map((x, i) => `
+    host.innerHTML = ranked.map((x, i) => {
+      const thin = x.s.count < 5 ? ' · <span class="thin">thin sample</span>' : '';
+      const backend = ` · <span class="backend ${x.s.dep}">backend ${x.s.dep}</span>`;
+      return `
       <div class="prio">
         <div class="rank">${i + 1}</div>
         <div class="snum" style="background:${THEMES[x.uc.act].grad}">${x.uc.id.replace('UC','')}</div>
         <div class="pbody">
           <h3>${esc(x.uc.title)}</h3>
-          <div class="meta">${x.uc.id} · value ${x.s.avgV.toFixed(1)} · effort ${x.s.avgE.toFixed(1)} · ${x.s.count} vote${x.s.count === 1 ? '' : 's'}</div>
+          <div class="meta">${x.uc.id} · value ${x.s.avgV.toFixed(1)} · effort ${x.s.avgE.toFixed(1)} · <b>${x.s.count} vote${x.s.count === 1 ? '' : 's'}</b>${thin}${backend}</div>
         </div>
         <div class="score">${x.s.score.toFixed(1)}<small>SCORE</small></div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
+  }
+
+  // ---- dependency on ArcelorMittal systems (per use case) ----
+  function tallySorted(responses, field) {
+    return Object.entries(tallyField(responses, field)).sort((a, b) => b[1] - a[1]);
+  }
+
+  function renderDependencies(rows) {
+    const host = document.getElementById('depList');
+    const ranked = rows
+      .map(r => ({ uc: r.uc, resp: r.resp, s: summarise(r.resp, r.uc) }))
+      .filter(x => x.s.count)
+      .sort((a, b) => b.s.score - a.s.score);
+    if (!ranked.length) { host.innerHTML = '<div class="hm-empty">No responses yet.</div>'; return; }
+
+    host.innerHTML = ranked.map(x => {
+      const sys = tallySorted(x.resp, 'data');
+      const max = sys.length ? sys[0][1] : 1;
+      const tags = sys.length
+        ? sys.map(([name, n]) => {
+            const w = (0.35 + 0.65 * (n / max)).toFixed(3);   // relative weight → tag heat
+            const bk = BACKEND_SYSTEMS.has(name) ? ' bk' : '';  // AM back-end = integration cost
+            return `<span class="dep-tag${bk}" style="--w:${w}">${esc(name)}<b>${n}</b></span>`;
+          }).join('')
+        : '<span class="dep-none">no systems indicated</span>';
+      return `
+        <div class="dep-uc">
+          <div class="dep-head">
+            <span class="snum" style="background:${THEMES[x.uc.act].grad}">${x.uc.id.replace('UC','')}</span>
+            <h3>${esc(x.uc.title)}</h3>
+          </div>
+          <div class="dep-tags">${tags}</div>
+        </div>`;
+    }).join('');
+  }
+
+  // ---- systems overview (reverse: which use cases lean on each system) ----
+  function renderSystems(rows) {
+    const host = document.getElementById('sysList');
+    const mentions = {};               // system → total picks
+    const ucs = {};                    // system → Set of use-case ids
+    rows.forEach(({ uc, resp }) => resp.forEach(r => (r.data || []).forEach(d => {
+      mentions[d] = (mentions[d] || 0) + 1;
+      (ucs[d] = ucs[d] || new Set()).add(uc.id);
+    })));
+
+    const names = Object.keys(mentions);
+    if (!names.length) { host.innerHTML = '<div class="hm-empty">No responses yet.</div>'; return; }
+
+    // canonical systems first, then any write-in additions; each by frequency
+    const ordered = names.sort((a, b) => {
+      const ca = DATA_OPTIONS.indexOf(a) === -1, cb = DATA_OPTIONS.indexOf(b) === -1;
+      if (ca !== cb) return ca ? 1 : -1;
+      return mentions[b] - mentions[a];
+    });
+    const max = Math.max(...names.map(n => mentions[n]));
+
+    host.innerHTML = '<div class="agg-group">' + ordered.map(name => {
+      const n = mentions[name], k = ucs[name].size;
+      const bk = BACKEND_SYSTEMS.has(name) ? ' bk' : '';
+      return `
+        <div class="bar sys-bar${bk}">
+          <div class="blabel">${esc(name)}</div>
+          <div class="btrack"><div class="bfill" style="width:${(n / max * 100).toFixed(1)}%"></div></div>
+          <div class="bn">${n}</div>
+          <div class="sys-ucs">${k} UC${k === 1 ? '' : 's'}</div>
+        </div>`;
+    }).join('') + '</div>';
   }
 
   // ====================== EXPORT ======================
@@ -203,16 +332,17 @@
 
     // Section 1: summary (one row per use case)
     let out = 'SUMMARY\n';
-    out += ['UC', 'Title', 'Theme', 'Responses', 'Avg value', 'Avg effort', 'Priority score',
+    out += ['UC', 'Title', 'Theme', 'Responses', 'Avg value', 'Avg effort', 'Backend dependency', 'Priority score',
             'Top channels', 'Top actions', 'Top data'].map(csvCell).join(',') + '\n';
     const topList = (resp, field) => {
       const t = tallyField(resp, field);
       return Object.entries(t).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} (${n})`).join('; ');
     };
     rows.forEach(({ uc, resp }) => {
-      const s = summarise(resp);
+      const s = summarise(resp, uc);
       out += [uc.id, uc.title, THEMES[uc.act].label, s.count,
               s.count ? s.avgV.toFixed(2) : '', s.count ? s.avgE.toFixed(2) : '',
+              s.dep,
               s.count ? s.score.toFixed(2) : '',
               topList(resp, 'channels'), topList(resp, 'actions'), topList(resp, 'data')]
              .map(csvCell).join(',') + '\n';

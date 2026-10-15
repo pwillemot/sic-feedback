@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ArcelorMittal · Use-Case Priorities · v2 (local)</title>
+<script>try{var t=localStorage.getItem('am-long-sic-theme');if(t==='light')document.documentElement.setAttribute('data-theme','light');}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="css/styles.css" />
+<style>
+  /* v2-only badge colours for the back-end dependency tag in the priority list */
+  .prio .pbody .meta .backend { font-weight: 600; text-transform: capitalize; }
+  .prio .pbody .meta .backend.low    { color: var(--mist); }
+  .prio .pbody .meta .backend.medium { color: #ffb020; }
+  .prio .pbody .meta .backend.high   { color: #ff5a4d; }
+  .prio .pbody .meta b { color: var(--ink-soft); font-weight: 700; }
+  /* v2: per-card score breakdown so the number is traceable */
+  .prio .pbody .meta.calc { margin-top: 3px; font-size: 0.82em; color: var(--mist); font-variant-numeric: tabular-nums; letter-spacing: .2px; }
+  .prio .pbody .meta.calc b { color: var(--molten-2); font-weight: 700; }
+  .prio .pbody .meta.calc .lbl { color: var(--ink-soft); font-weight: 700; opacity: 0.75; margin-right: 2px; }
+  /* v2: plain-language "how the score works" explainer */
+  .how { background: var(--panel-2, rgba(255,255,255,0.03)); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin: 2px 0 14px; }
+  .how b { color: var(--ink-soft); }
+  .how ol { margin: 8px 0 0; padding-left: 20px; }
+  .how li { margin: 5px 0; color: var(--mist); line-height: 1.45; }
+  .how li b { color: var(--ink); }
+  .how .final { margin-top: 9px; color: var(--ink-soft); font-weight: 700; }
+  /* v2: scoring-formula card — header shares the content grid so the box
+     sits exactly above the Priority panel (same width + right edge) */
+  .main-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+  .col-left { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+  .col-right { min-width: 0; }
+  .res-head-left { min-width: 0; }
+  .res-head-left .res-stats { margin: 18px 0 0; }
+  .formula-box { min-width: 0; background: var(--steel-2); border: 1px solid var(--line); border-radius: 16px; padding: 18px 22px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+  .formula-box .fb-h { font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--mist); font-weight: 700; margin-bottom: 14px; }
+  .formula-box .fb-eq { font-family: 'Oswald', sans-serif; font-weight: 700; font-size: 1.6rem; line-height: 1.1; color: var(--ink-soft); display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 9px; }
+  .formula-box .fb-eq .op, .formula-box .fb-eq .paren { color: var(--mist); font-weight: 500; }
+  .formula-box .fb-eq .score-k { background: var(--grad); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  .formula-box .v { color: #35d6a4; }
+  .formula-box .e { color: #ffb020; }
+  .formula-box .b { color: #ff5a4d; }
+  .formula-box .p { color: #7aa7ff; }
+  .formula-box .fb-legend { list-style: none; margin: 16px 0 0; padding: 0; }
+  .formula-box .fb-legend li { font-size: 12.5px; color: var(--mist); line-height: 1.5; margin: 5px 0; overflow-wrap: anywhere; }
+  .formula-box .fb-legend li b { color: var(--ink-soft); }
+  .formula-box .fb-legend .v, .formula-box .fb-legend .e, .formula-box .fb-legend .b, .formula-box .fb-legend .p { font-family: 'Oswald', sans-serif; font-weight: 700; }
+  .formula-box .fb-note { margin-top: 13px; padding-top: 11px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--mist); opacity: 0.88; line-height: 1.5; }
+  @media (max-width: 860px) {
+    .main-grid { grid-template-columns: 1fr; }
+  }
+  /* v2: heat map must fill the panel width, with the legend stacked UNDER it */
+  #heatHost { display: flex; flex-direction: column; align-items: stretch; }
+  #heatHost svg { width: 100%; height: auto; display: block; }
+  /* v2: "Quick win" badge on the priority card */
+  .prio .pbody h3 .qw { display: inline-block; margin-left: 8px; vertical-align: middle; font-family: 'Oswald', sans-serif; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; font-weight: 700; color: #06281e; background: #35d6a4; padding: 2px 7px; border-radius: 999px; }
+  /* v2: heat-map back-end-dependency legend (links bubble outline → score discount) */
+  .hm-legend { display: flex; flex-wrap: wrap; gap: 7px 16px; margin-top: 14px; font-size: 11.5px; color: var(--mist); }
+  .hm-legend .k { display: inline-flex; align-items: center; gap: 6px; }
+  .hm-legend .dot { width: 13px; height: 13px; border-radius: 50%; box-sizing: border-box; }
+  .hm-legend .dot.low { border: 2px solid #8aa0ad; }
+  .hm-legend .dot.medium { border: 2px dashed #ffb020; }
+  .hm-legend .dot.high { border: 2px dashed #ff5a4d; }
+  .hm-legend .sz { opacity: 0.8; }
+</style>
+</head>
+<body>
+
+<!-- ---------- Top bar ---------- -->
+<div class="topbar">
+  <a class="brand" href="results-v2.html">
+    <div class="brand-logo">
+      <svg viewBox="0 0 130 60" xmlns="http://www.w3.org/2000/svg" aria-label="ArcelorMittal">
+        <path d="M14 52 C 40 8, 96 0, 124 22 C 100 10, 58 20, 42 48 C 56 24, 84 22, 94 34 L 80 46"
+              fill="none" stroke="#f6651e" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span class="wordmark">ArcelorMittal</span>
+    </div>
+    <img class="sf-logo" src="img/salesforce-logo.png" alt="Salesforce" />
+  </a>
+  <div class="topbar-right">
+    <nav class="ver-switch" aria-label="Results version">
+      <a href="results.html">Live</a>
+      <a href="results-v2.html" class="active" aria-current="page">Final v2</a>
+    </nav>
+    <button class="theme-toggle" title="Toggle light / dark" aria-label="Toggle light or dark theme">
+      <svg class="ic-moon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      <svg class="ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8l1.8-1.8M18 6l1.8-1.8"/></svg>
+    </button>
+  </div>
+</div>
+
+<div class="results-wrap">
+  <div class="main-grid">
+    <div class="col-left">
+    <div class="res-head-left">
+      <div class="eyebrow">Final results</div>
+      <h1>Use-case <span class="accent">priorities</span></h1>
+      <div class="res-stats" id="stats"></div>
+    </div>
+
+    <!-- The scoring formula, in one line -->
+    <div class="formula-box">
+      <div class="fb-h">The score, in one line</div>
+      <div class="fb-eq">
+        <span class="score-k">SCORE</span><span class="op">=</span><span class="v">V</span><span class="op">×</span><span class="e">E</span><span class="op">×</span><span class="paren">(1 −</span><span class="b">backend</span><span class="paren">)</span><span class="op">×</span><span class="p">popularity</span>
+      </div>
+      <ul class="fb-legend">
+        <li><span class="v">V</span> — vote-weighted <b>business value</b> (1&ndash;5)</li>
+        <li><span class="e">E</span> — vote-weighted <b>effort today</b> (1&ndash;5)</li>
+        <li><span class="b">backend</span> — integration penalty: low <b>0%</b> · medium <b>10%</b> · high <b>20%</b></li>
+        <li><span class="p">popularity</span> — more votes = higher score (the most-voted keeps <b>100%</b>, the least-voted <b>70%</b>)</li>
+      </ul>
+      <div class="fb-note">Vote-weighted: each average is first nudged toward neutral (3) by the weight of ~3 votes, so a handful of votes can&rsquo;t dominate; then popularity rewards the use cases the whole room rated.</div>
+    </div>
+
+    <!-- Heat map -->
+    <div class="card-panel">
+      <h2>The prize <span class="accent">vs. the priority</span></h2>
+      <div class="sub">
+        <b>Position = the raw prize:</b> further up &amp; to the right = more business value and more manual effort removed. The <b>final priority</b> also depends on back-end integration cost &mdash; shown by each bubble&rsquo;s outline &mdash; so the label under every bubble is its <b>rank &amp; score from the list on the right</b>. That&rsquo;s why a top-right bubble can still rank low.
+      </div>
+      <div id="heatHost"><div class="hm-empty" id="hmEmpty">No responses.</div></div>
+    </div>
+    </div><!-- /col-left -->
+
+    <div class="col-right">
+    <!-- Priority list -->
+    <div class="card-panel">
+      <h2>Priority ranking</h2>
+      <div class="sub">Ranked highest-first &mdash; each card shows its own math (see the formula top-right).</div>
+      <div class="prio-list" id="prioList"></div>
+    </div>
+    </div><!-- /col-right -->
+  </div>
+</div>
+
+<script type="module">
+  import { USE_CASES, THEMES } from "./js/usecases.js";
+
+  // ---- Embedded meeting snapshot (from sic-use-case-feedback export, 8 Oct 2026) ----
+  // Per use case: number of responses + average value / effort (1–5).
+  const DATA = {
+    UC01: { n: 17, avgV: 4.47, avgE: 3.82 },
+    UC02: { n: 12, avgV: 4.25, avgE: 3.67 },
+    UC03: { n: 14, avgV: 4.07, avgE: 3.57 },
+    UC04: { n: 13, avgV: 4.00, avgE: 3.92 },
+    UC05: { n: 12, avgV: 4.58, avgE: 4.42 },
+    UC06: { n: 12, avgV: 4.25, avgE: 4.33 },
+    UC07: { n:  6, avgV: 3.50, avgE: 3.67 },
+    UC08: { n:  3, avgV: 4.33, avgE: 4.67 },
+    UC09: { n:  0 },
+    UC10: { n:  0 },
+  };
+
+  // Rebuild per-use-case responses from the snapshot so the original render
+  // functions below work unchanged (each response carries the use case's averages).
+  function snapshotMap() {
+    const map = {};
+    USE_CASES.forEach(uc => {
+      const d = DATA[uc.id] || { n: 0 };
+      map[uc.id] = Array.from({ length: d.n || 0 }, () => ({ value: d.avgV, effort: d.avgE }));
+    });
+    return map;
+  }
+
+  // ====== scoring ======
+  const MIDPOINT = 3, PRIOR_K = 3;
+  const DEP_DISCOUNT = { low: 0, medium: 0.1, high: 0.2 };
+  // Popularity: the most-voted use case keeps 100% of its score; the least-voted
+  // keeps POP_FLOOR. So the more people rated it, the higher it ranks.
+  const POP_FLOOR = 0.7;
+  let MAX_VOTES = 1;
+  const popFactor = (count) => POP_FLOOR + (1 - POP_FLOOR) * (MAX_VOTES ? Math.min(1, count / MAX_VOTES) : 0);
+  const avg = (arr) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+  const shrink = (sum, k) => (sum + PRIOR_K * MIDPOINT) / (k + PRIOR_K);
+  const esc = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const QUICK_WINS = new Set(['UC08']); // Agentforce Co-worker
+
+  function summarise(responses, uc) {
+    const vals = responses.map(r => r.value).filter(Boolean);
+    const effs = responses.map(r => r.effort).filter(Boolean);
+    const count = responses.length;
+    const avgV = avg(vals), avgE = avg(effs);
+    const adjV = shrink(vals.reduce((a, b) => a + b, 0), vals.length);
+    const adjE = shrink(effs.reduce((a, b) => a + b, 0), effs.length);
+    const demand = adjV * adjE;
+    const dep = (uc && uc.dep) || 'low';
+    const depDiscount = DEP_DISCOUNT[dep] ?? 0;
+    const pop = popFactor(count);
+    const score = (vals.length && effs.length) ? demand * (1 - depDiscount) * pop : 0;
+    return { count, avgV, avgE, adjV, adjE, demand, dep, depDiscount, pop, score };
+  }
+
+  // ====== render ======
+  function render(map) {
+    const rows = USE_CASES.map(uc => ({ uc, resp: map[uc.id] || [] }));
+    const totalResponses = rows.reduce((n, r) => n + r.resp.length, 0);
+    const ucsWith = rows.filter(r => r.resp.length).length;
+    MAX_VOTES = Math.max(1, ...rows.map(r => r.resp.length)); // popularity baseline
+
+    document.getElementById('stats').innerHTML = `
+      <div class="res-stat"><div class="n">${totalResponses}</div><div class="l">Responses</div></div>
+      <div class="res-stat"><div class="n">${ucsWith}/${USE_CASES.length}</div><div class="l">Use cases rated</div></div>`;
+
+    renderHeatmap(rows);
+    renderPriority(rows);
+  }
+
+  function renderHeatmap(rows) {
+    const host = document.getElementById('heatHost');
+    const rated = rows.filter(r => r.resp.length && summarise(r.resp, r.uc).count);
+    if (!rated.length) { host.innerHTML = '<div class="hm-empty">No responses.</div>'; return; }
+
+    // ---- Zoomed into the "Do First" corner: axes auto-fit the data (with padding)
+    //      so the bubbles fill the plot instead of hugging one edge ----
+    const stats = rated.map(r => summarise(r.resp, r.uc));
+    const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+    // round to a 0.25 grid, pad each side, keep inside 1..5 and a sensible min span
+    const fit = (lo, hi) => {
+      const pad = Math.max(0.3, (hi - lo) * 0.3);
+      let a = Math.max(1, Math.floor((lo - pad) * 4) / 4);
+      let b = Math.min(5, Math.ceil((hi + pad) * 4) / 4);
+      if (b - a < 1) { const mid = (a + b) / 2; a = Math.max(1, mid - 0.5); b = Math.min(5, mid + 0.5); }
+      return [a, b];
+    };
+    const [eLo, eHi] = fit(Math.min(...stats.map(s => s.avgE)), Math.max(...stats.map(s => s.avgE)));
+    const [vLo, vHi] = fit(Math.min(...stats.map(s => s.avgV)), Math.max(...stats.map(s => s.avgV)));
+    const mkTicks = (lo, hi) => { const step = (hi - lo) <= 1.6 ? 0.25 : 0.5, out = []; for (let x = lo; x <= hi + 1e-9; x += step) out.push(Math.round(x * 100) / 100); return out; };
+
+    const W = 560, H = 460, m = { l: 72, r: 28, t: 36, b: 60 };
+    const px = (e) => m.l + (clamp(e, eLo, eHi) - eLo) / (eHi - eLo) * (W - m.l - m.r);
+    const py = (v) => (H - m.b) - (clamp(v, vLo, vHi) - vLo) / (vHi - vLo) * (H - m.t - m.b);
+    const t = (act) => THEMES[act].solid;
+
+    // gridlines + numeric tick labels so people can read each bubble's position
+    let grid = '';
+    mkTicks(eLo, eHi).forEach(tk => {
+      const x = px(tk);
+      grid += `<line x1="${x.toFixed(1)}" y1="${m.t}" x2="${x.toFixed(1)}" y2="${H-m.b}" stroke="var(--line)" stroke-width="1" stroke-dasharray="3 5" opacity="0.45"/>`;
+      grid += `<text x="${x.toFixed(1)}" y="${H-m.b+18}" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="var(--mist)">${tk.toFixed(2).replace(/0$/,'')}</text>`;
+    });
+    mkTicks(vLo, vHi).forEach(tk => {
+      const y = py(tk);
+      grid += `<line x1="${m.l}" y1="${y.toFixed(1)}" x2="${W-m.r}" y2="${y.toFixed(1)}" stroke="var(--line)" stroke-width="1" stroke-dasharray="3 5" opacity="0.45"/>`;
+      grid += `<text x="${m.l-10}" y="${(y+4).toFixed(1)}" text-anchor="end" font-family="Inter, sans-serif" font-size="11" fill="var(--mist)">${tk.toFixed(2).replace(/0$/,'')}</text>`;
+    });
+
+    // rank + final score per use case, computed exactly like the priority list,
+    // so each bubble is labelled with its position in that list
+    const rankMap = {};
+    rated.map(r => ({ id: r.uc.id, s: summarise(r.resp, r.uc) }))
+         .sort((a, b) => b.s.score - a.s.score)
+         .forEach((x, i) => { rankMap[x.id] = { rank: i + 1, score: x.s.score }; });
+
+    // bubble outline encodes back-end integration cost (the discount in the score)
+    const DEP_STYLE = {
+      low:    { op: 0.34, w: 2,   dash: '',    stroke: null },
+      medium: { op: 0.26, w: 2,   dash: '5 4', stroke: '#ffb020' },
+      high:   { op: 0.16, w: 2.5, dash: '4 4', stroke: '#ff5a4d' },
+    };
+
+    let bubbles = '', labels = '';
+    rated.forEach(r => {
+      const s = summarise(r.resp, r.uc);
+      const cx = px(s.avgE), cy = py(s.avgV);
+      const rad = 10 + Math.min(18, s.count * 2.5);
+      const col = t(r.uc.act);
+      const ds = DEP_STYLE[r.uc.dep] || DEP_STYLE.low;
+      const stroke = ds.stroke || col;
+      const info = rankMap[r.uc.id] || { rank: '', score: 0 };
+      bubbles += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${rad}" fill="${col}" fill-opacity="${ds.op}" stroke="${stroke}" stroke-width="${ds.w}"${ds.dash ? ` stroke-dasharray="${ds.dash}"` : ''}/>`;
+      labels += `<text x="${cx.toFixed(1)}" y="${cy.toFixed(1)}" text-anchor="middle" dominant-baseline="central" font-family="Oswald, sans-serif" font-weight="700" font-size="14" fill="var(--ink)">${r.uc.id.replace('UC','')}</text>`;
+      labels += `<text x="${cx.toFixed(1)}" y="${(cy + rad + 13).toFixed(1)}" text-anchor="middle" font-family="Inter, sans-serif" font-weight="700" font-size="11" fill="var(--ink-soft)">#${info.rank} · ${info.score.toFixed(1)}</text>`;
+    });
+
+    host.innerHTML = `
+      <svg id="heatmap" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="doFirstZone" x1="0" y1="1" x2="1" y2="0">
+            <stop offset="0" stop-color="#35d6a4" stop-opacity="0.04"/>
+            <stop offset="1" stop-color="#35d6a4" stop-opacity="0.22"/>
+          </linearGradient>
+        </defs>
+        <rect x="${m.l}" y="${m.t}" width="${W-m.r-m.l}" height="${H-m.b-m.t}" fill="url(#doFirstZone)"/>
+        ${grid}
+        <line x1="${m.l}" y1="${m.t}" x2="${m.l}" y2="${H-m.b}" stroke="var(--line)" stroke-width="1.5"/>
+        <line x1="${m.l}" y1="${H-m.b}" x2="${W-m.r}" y2="${H-m.b}" stroke="var(--line)" stroke-width="1.5"/>
+        <text x="${W-m.r-8}" y="${m.t-10}" text-anchor="end" font-family="Oswald, sans-serif" font-size="13" font-weight="700" fill="#35d6a4">BIGGEST PRIZE  ↗</text>
+        <text x="${(m.l+W-m.r)/2}" y="${H-16}" text-anchor="middle" font-family="Oswald" font-size="13" font-weight="700" fill="var(--ink-soft)">MANUAL EFFORT TODAY  →</text>
+        <text x="20" y="${(m.t+H-m.b)/2}" text-anchor="middle" font-family="Oswald" font-size="13" font-weight="700" fill="var(--ink-soft)" transform="rotate(-90 20 ${(m.t+H-m.b)/2})">BUSINESS VALUE  →</text>
+        ${bubbles}
+        ${labels}
+      </svg>
+      <div class="hm-legend">
+        <span class="k"><span class="dot low"></span>low back-end</span>
+        <span class="k"><span class="dot medium"></span>medium</span>
+        <span class="k"><span class="dot high"></span>high &mdash; discounted hardest</span>
+        <span class="k sz">bubble size = votes · label under bubble = #rank &amp; score</span>
+      </div>`;
+  }
+
+  function renderPriority(rows) {
+    const ranked = rows
+      .map(r => ({ uc: r.uc, s: summarise(r.resp, r.uc) }))
+      .filter(x => x.s.count)
+      .sort((a, b) => b.s.score - a.s.score);
+
+    const host = document.getElementById('prioList');
+    if (!ranked.length) { host.innerHTML = '<div class="hm-empty">No responses yet.</div>'; return; }
+    host.innerHTML = ranked.map((x, i) => {
+      const s = x.s;
+      const backend = ` · <span class="backend ${s.dep}">backend ${s.dep}</span>`;
+      const pct = Math.round(s.depDiscount * 100);
+      const discount = pct ? ` − ${pct}% backend` : '';
+      const popPct = Math.round(s.pop * 100);
+      // show the actual, vote-weighted numbers that produced the score
+      const calc = `<span class="lbl">vote-weighted</span> ${s.adjV.toFixed(1)} × ${s.adjE.toFixed(1)} = ${s.demand.toFixed(1)}${discount} × ${popPct}% popularity → <b>${s.score.toFixed(1)}</b>`;
+      return `
+      <div class="prio">
+        <div class="rank">${i + 1}</div>
+        <div class="snum" style="background:${THEMES[x.uc.act].grad}">${x.uc.id.replace('UC','')}</div>
+        <div class="pbody">
+          <h3>${esc(x.uc.title)}${QUICK_WINS.has(x.uc.id) ? '<span class="qw">Quick win</span>' : ''}</h3>
+          <div class="meta">room avg · value ${s.avgV.toFixed(1)} · effort ${s.avgE.toFixed(1)} · <b>${s.count} vote${s.count === 1 ? '' : 's'}</b>${backend}</div>
+          <div class="meta calc" title="raw room averages are pulled toward neutral by the vote weight, then multiplied and discounted for back-end cost">${calc}</div>
+        </div>
+        <div class="score">${s.score.toFixed(1)}<small>SCORE</small></div>
+      </div>`;
+    }).join('');
+  }
+
+  render(snapshotMap());
+
+  // ---- Theme toggle (shared) ----
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest('.theme-toggle')) return;
+    var light = document.documentElement.getAttribute('data-theme') === 'light';
+    if (light) { document.documentElement.removeAttribute('data-theme'); }
+    else { document.documentElement.setAttribute('data-theme', 'light'); }
+    try { localStorage.setItem('am-long-sic-theme', light ? 'dark' : 'light'); } catch (e) {}
+  });
+</script>
+</body>
+</html>

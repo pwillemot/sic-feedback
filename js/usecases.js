@@ -20,26 +20,29 @@ export const THEMES = {
   every: { label: "Agents Everywhere",   solid: "#e4002b", grad: "linear-gradient(135deg,#ff5a4d,#e4002b)" },
 };
 
+// `dep` = dependency on ArcelorMittal back-end systems (manual, business-set guidance):
+//   low | medium | high. Higher dependency = more integration effort → the results
+//   page discounts the priority score accordingly. Edit these freely.
 export const USE_CASES = [
-  { id: "UC01", act: "sell",  tag: "Inbound Email → Quote",    title: "Automatic Quote From an Email",
+  { id: "UC01", act: "sell",  dep: "low",    tag: "Inbound Email → Quote",    title: "Automatic Quote From an Email",
     lead: "An inbound quote-request email becomes a full project and drafts a priced quote on its own." },
-  { id: "UC02", act: "sell",  tag: "Natural-Language Quote",   title: "Natural-Language Quote Creation",
+  { id: "UC02", act: "sell",  dep: "low",    tag: "Natural-Language Quote",   title: "Natural-Language Quote Creation",
     lead: "Describe the quote in plain language and get a configured, priced quote from the catalog." },
-  { id: "UC03", act: "sell",  tag: "Voice Visit Report",       title: "Voice Visit Report",
+  { id: "UC03", act: "sell",  dep: "low",    tag: "Voice Visit Report",       title: "Voice Visit Report",
     lead: "After a visit, a voice note (and/or a photo) becomes a structured visit report in the CRM." },
-  { id: "UC04", act: "sell",  tag: "Natural-Language Analytics", title: "Steer the Business by Asking",
+  { id: "UC04", act: "sell",  dep: "medium", tag: "Natural-Language Analytics", title: "Steer the Business by Asking",
     lead: "Ask the numbers in plain language and see the answer visualised right in the conversation." },
-  { id: "UC05", act: "sell",  tag: "Order Tracking",           title: "Where Is My Order?",
+  { id: "UC05", act: "sell",  dep: "high",   tag: "Order Tracking",           title: "Where Is My Order?",
     lead: "The agent answers order, shipment and delivery questions — status, ETA, truck location, driver." },
-  { id: "UC06", act: "know",  tag: "Data Quality",             title: "AI-Driven Data Quality",
+  { id: "UC06", act: "know",  dep: "low",    tag: "Data Quality",             title: "AI-Driven Data Quality",
     lead: "Native rules catch the obvious, an AI scan flags the subtle, a cockpit + agent help fix it." },
-  { id: "UC07", act: "know",  tag: "Onboarding Coach",         title: "Onboarding / Process-Explainer",
+  { id: "UC07", act: "know",  dep: "low",    tag: "Onboarding Coach",         title: "Onboarding / Process-Explainer",
     lead: "A new joiner asks how a task is done and gets an answer grounded in approved documents." },
-  { id: "UC08", act: "know",  tag: "Agentforce Co-worker",     title: "Agentforce Co-worker",
+  { id: "UC08", act: "know",  dep: "low",    tag: "Agentforce Co-worker",     title: "Agentforce Co-worker",
     lead: "The out-of-the-box Agentforce co-worker agent, shown against this org's own data." },
-  { id: "UC09", act: "every", tag: "Agentforce in Teams",      title: "Agentforce & Teams",
+  { id: "UC09", act: "every", dep: "low",    tag: "Agentforce in Teams",      title: "Agentforce & Teams",
     lead: "The same account intelligence surfaced inside Microsoft Teams, where people already work." },
-  { id: "UC10", act: "every", tag: "Claudeforce",              title: "Claudeforce",
+  { id: "UC10", act: "every", dep: "low",    tag: "Claudeforce",              title: "Claudeforce",
     lead: "Talk to — and build against — Salesforce itself, conversationally, live in the session." },
 ];
 
